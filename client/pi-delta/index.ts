@@ -31,7 +31,7 @@ const provider = "lan-delta";
 const fingerprint = process.env.PI_DELTA_MODEL_FINGERPRINT ?? "qwen3-0.6b@v1";
 const mode = process.env.PI_DELTA_MODE === "full" ? "full" : "delta";
 
-function canonical(value: any): string {
+export function canonical(value: any): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
@@ -42,7 +42,7 @@ function canonical(value: any): string {
     (key) => JSON.stringify(key) + ":" + canonical(value[key])
   ).join(",") + "}";
 }
-function sha(value: any): string {
+export function sha(value: any): string {
   return "sha256:" + createHash("sha256").update(canonical(value), "utf8").digest("hex");
 }
 function jsonClone(value: any): any {
