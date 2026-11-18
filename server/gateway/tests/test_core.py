@@ -118,3 +118,49 @@ def test_tool_calls_survive_delta():
         {"role": "tool", "tool_call_id": "call_1", "content": "3"},
     ], tools=old["tools"])
     assert reconstruct(old, make_delta(old, new)) == new
+
+
+def test_ttl_expiration_and_session_limit(tmp_path):
+    import time
+    store = SnapshotStore(str(tmp_path / "ttl.sqlite"), "qwen3-0.6b",
+                          "qwen3-0.6b@v1", ttl_seconds=0.01, max_branches=1)
+    first = req([{"role": "user", "content": "x"}])
+    p1 = packet(first)
+    store.apply(p1)
+    p2 = packet(first)
+    with pytest.raises(ProtocolError) as exc:
+        store.apply(p2)
+    assert exc.value.code == "SESSION_LIMIT"
+    time.sleep(0.03)
+    store.apply(p2)
+    assert store.get(p1["session_id"], p1["branch_id"]) is None
+    store.close()
+
+
+def test_concurrent_delta_only_one_version_wins(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    store = SnapshotStore(str(tmp_path / "concurrent.sqlite"), "qwen3-0.6b", "qwen3-0.6b@v1")
+    first = req([{"role": "user", "content": "hello"}])
+    p1 = packet(first)
+    store.apply(p1)
+    def next_packet(suffix):
+        new = req(first["messages"] + [{"role": "assistant", "content": suffix}])
+        return {
+            "protocol": "pi-delta/v1", "request_id": str(uuid.uuid4()),
+            "session_id": p1["session_id"], "branch_id": p1["branch_id"],
+            "kind": "delta", "base_revision": 1, "base_hash": digest(first),
+            "model_fingerprint": "qwen3-0.6b@v1",
+            "expected_request_sha256": digest(new),
+            "delta": make_delta(first, new),
+        }
+    packets = [next_packet("A"), next_packet("B")]
+    def execute(p):
+        try:
+            return store.apply(p)[1]
+        except ProtocolError as exc:
+            return exc.code
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        results = list(ex.map(execute, packets))
+    assert sorted(map(str, results)) == ["2", "VERSION_CONFLICT"]
+    assert store.get(p1["session_id"], p1["branch_id"])["revision"] == 2
+    store.close()

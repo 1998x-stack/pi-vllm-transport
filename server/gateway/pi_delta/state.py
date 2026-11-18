@@ -5,16 +5,19 @@ import json
 import os
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from .core import ProtocolError, digest, reconstruct, validate, validate_request
 
 
 class SnapshotStore:
-    def __init__(self, path: str, model: str, fingerprint: str):
+    def __init__(self, path: str, model: str, fingerprint: str, ttl_seconds: int = 86400, max_branches: int = 100):
         self.path = path
         self.model = model
         self.fingerprint = fingerprint
+        self.ttl_seconds = ttl_seconds
+        self.max_branches = max_branches
         if path != ":memory:":
             db = Path(path).expanduser().resolve()
             db.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -27,6 +30,7 @@ class SnapshotStore:
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None, timeout=30)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA busy_timeout = 30000")
+        self._db.execute("PRAGMA secure_delete = ON")
         if path != ":memory:":
             self._db.execute("PRAGMA journal_mode = WAL")
             try:
@@ -41,6 +45,7 @@ class SnapshotStore:
               request_hash TEXT NOT NULL,
               model_fingerprint TEXT NOT NULL,
               request_json TEXT NOT NULL,
+              updated_at REAL NOT NULL DEFAULT 0,
               PRIMARY KEY(session_id, branch_id)
             );
             CREATE TABLE IF NOT EXISTS requests (
@@ -49,9 +54,18 @@ class SnapshotStore:
               session_id TEXT NOT NULL,
               branch_id TEXT NOT NULL,
               target_revision INTEGER NOT NULL,
-              request_hash TEXT NOT NULL
+              request_hash TEXT NOT NULL,
+              created_at REAL NOT NULL DEFAULT 0
             );
         """)
+        # Existing development databases from the initial code need additive migration.
+        for table, column, ddl in (
+            ("branches", "updated_at", "REAL NOT NULL DEFAULT 0"),
+            ("requests", "created_at", "REAL NOT NULL DEFAULT 0"),
+        ):
+            cols = {row["name"] for row in self._db.execute(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def close(self) -> None:
         with self._lock:
@@ -74,6 +88,10 @@ class SnapshotStore:
             db = self._db
             db.execute("BEGIN IMMEDIATE")
             try:
+                now = time.time()
+                cutoff = now - self.ttl_seconds
+                db.execute("DELETE FROM branches WHERE updated_at < ?", (cutoff,))
+                db.execute("DELETE FROM requests WHERE created_at < ?", (cutoff,))
                 old_request = db.execute("SELECT packet_hash FROM requests WHERE request_id=?", (rid,)).fetchone()
                 if old_request:
                     code = "IDEMPOTENT_REPLAY" if old_request["packet_hash"] == packet_hash else "IDEMPOTENCY_CONFLICT"
@@ -84,6 +102,9 @@ class SnapshotStore:
                 if packet["kind"] == "full":
                     if row:
                         raise ProtocolError("BRANCH_ALREADY_EXISTS", "full resync requires a new branch_id", 409)
+                    count = db.execute("SELECT COUNT(*) FROM branches").fetchone()[0]
+                    if count >= self.max_branches:
+                        raise ProtocolError("SESSION_LIMIT", "maximum active branches reached", 429)
                     upstream = packet["full"]["request"]
                     revision = 1
                 else:
@@ -102,18 +123,18 @@ class SnapshotStore:
                 serialized = json.dumps(upstream, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
                 if row is None:
                     db.execute(
-                        "INSERT INTO branches VALUES(?,?,?,?,?,?)",
-                        (sid, bid, revision, request_hash, self.fingerprint, serialized),
+                        "INSERT INTO branches VALUES(?,?,?,?,?,?,?)",
+                        (sid, bid, revision, request_hash, self.fingerprint, serialized, now),
                     )
                 else:
                     db.execute(
-                        "UPDATE branches SET revision=?,request_hash=?,model_fingerprint=?,request_json=? "
+                        "UPDATE branches SET revision=?,request_hash=?,model_fingerprint=?,request_json=?,updated_at=? "
                         "WHERE session_id=? AND branch_id=?",
-                        (revision, request_hash, self.fingerprint, serialized, sid, bid),
+                        (revision, request_hash, self.fingerprint, serialized, now, sid, bid),
                     )
                 db.execute(
-                    "INSERT INTO requests VALUES (?,?,?,?,?,?)",
-                    (rid, packet_hash, sid, bid, revision, request_hash),
+                    "INSERT INTO requests VALUES (?,?,?,?,?,?,?)",
+                    (rid, packet_hash, sid, bid, revision, request_hash, now),
                 )
                 db.execute("COMMIT")
             except Exception:

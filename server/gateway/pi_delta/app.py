@@ -28,6 +28,8 @@ class Settings:
     db_path: str = "./data/sessions.sqlite"
     max_body: int = 16 * 1024 * 1024
     max_decompressed: int = 64 * 1024 * 1024
+    ttl_seconds: int = 86400
+    max_branches: int = 100
 
     @classmethod
     def from_env(cls):
@@ -40,6 +42,8 @@ class Settings:
             model=os.getenv("PI_DELTA_MODEL", "qwen3-0.6b"),
             fingerprint=os.getenv("PI_DELTA_MODEL_FINGERPRINT", "qwen3-0.6b@v1"),
             db_path=os.getenv("PI_DELTA_DB", "./data/sessions.sqlite"),
+            ttl_seconds=int(os.getenv("PI_DELTA_TTL_SECONDS", "86400")),
+            max_branches=int(os.getenv("PI_DELTA_MAX_BRANCHES", "100")),
         )
 
 
@@ -70,7 +74,8 @@ def _error(code, reason, status, request_id=None):
 
 def create_app(settings: Settings, transport: Optional[httpx.AsyncBaseTransport] = None) -> FastAPI:
     app = FastAPI(title="pi-vllm-delta-gateway", version="0.1.0")
-    app.state.store = SnapshotStore(settings.db_path, settings.model, settings.fingerprint)
+    app.state.store = SnapshotStore(settings.db_path, settings.model, settings.fingerprint,
+                                    ttl_seconds=settings.ttl_seconds, max_branches=settings.max_branches)
     app.state.upstream_transport = transport
     app.state.stats = {"requests": 0, "received_body_bytes": 0, "decoded_body_bytes": 0, "accepted": 0}
 
