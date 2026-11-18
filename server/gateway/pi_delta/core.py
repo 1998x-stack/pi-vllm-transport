@@ -9,7 +9,7 @@ from typing import Any
 import rfc8785
 from jsonschema import Draft202012Validator, FormatChecker
 
-SCHEMA_PATH = Path(__file__).resolve().parents[3] / "protocol" / "pi-delta-v1.schema.json"
+SCHEMA_PATH = Path(__import__("os").environ.get("PI_DELTA_SCHEMA", str(Path(__file__).resolve().parents[3] / "protocol" / "pi-delta-v1.schema.json")))
 SCHEMA = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 VALIDATOR = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
 

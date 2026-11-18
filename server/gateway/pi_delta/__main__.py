@@ -11,7 +11,7 @@ def main():
     uvicorn.run(
         "pi_delta.app:make_app",
         factory=True,
-        host="127.0.0.1",
+        host=os.getenv("PI_DELTA_HOST", "127.0.0.1"),
         port=int(os.getenv("PI_DELTA_PORT", "18080")),
         log_level="info",
     )

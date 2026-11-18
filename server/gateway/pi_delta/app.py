@@ -195,7 +195,7 @@ def create_app(settings: Settings, transport: Optional[httpx.AsyncBaseTransport]
 
         async def body_stream():
             try:
-                async for chunk in response.aiter_raw():
+                async for chunk in response.aiter_bytes():
                     yield chunk
             finally:
                 await response.aclose()
