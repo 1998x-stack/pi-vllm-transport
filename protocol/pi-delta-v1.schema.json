@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/1998x-stack/pi-vllm-transport/blob/main/protocol/pi-delta-v1.schema.json",
+  "title": "pi-delta/v1 inference request (design contract)",
+  "description": "Client request envelope for a stateful Pi-to-Gateway transport. The Gateway reconstructs a complete OpenAI Chat Completions request; vLLM never receives this transport envelope. Text and tool calls only in v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "request_id",
+    "session_id",
+    "branch_id",
+    "kind",
+    "base_revision",
+    "base_hash",
+    "model_fingerprint",
+    "expected_request_sha256"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "pi-delta/v1"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "branch_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "kind": {
+      "enum": [
+        "full",
+        "delta"
+      ]
+    },
+    "base_revision": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "base_hash": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "model_fingerprint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "expected_request_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "full": {
+      "$ref": "#/$defs/full"
+    },
+    "delta": {
+      "$ref": "#/$defs/delta"
+    }
+  },
+  "oneOf": [
+    {
+      "title": "Full snapshot",
+      "properties": {
+        "kind": {
+          "const": "full"
+        },
+        "base_revision": {
+          "type": "null"
+        },
+        "base_hash": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "full"
+      ],
+      "not": {
+        "required": [
+          "delta"
+        ]
+      }
+    },
+    {
+      "title": "Delta from previous accepted request",
+      "properties": {
+        "kind": {
+          "const": "delta"
+        },
+        "base_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "base_hash": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "required": [
+        "delta"
+      ],
+      "not": {
+        "required": [
+          "full"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "message": {
+      "type": "object",
+      "description": "OpenAI Chat Completions message. Allows tool_calls, null content and vendor extensions; Gateway checks upstream compatibility.",
+      "required": [
+        "role"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "system",
+            "developer",
+            "user",
+            "assistant",
+            "tool"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "upstreamRequest": {
+      "type": "object",
+      "description": "Complete OpenAI Chat Completions JSON request to be forwarded to local vLLM.",
+      "required": [
+        "model",
+        "messages",
+        "stream"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/message"
+          }
+        },
+        "stream": {
+          "const": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "envelopeValue": {
+      "type": "object",
+      "description": "Complete upstream request without messages; must be rehashed when any field changes.",
+      "required": [
+        "model",
+        "stream"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stream": {
+          "const": true
+        }
+      },
+      "additionalProperties": true,
+      "not": {
+        "required": [
+          "messages"
+        ]
+      }
+    },
+    "full": {
+      "type": "object",
+      "required": [
+        "request"
+      ],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/upstreamRequest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "delta": {
+      "type": "object",
+      "required": [
+        "keep_count",
+        "append_messages",
+        "envelope"
+      ],
+      "properties": {
+        "keep_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "append_messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/message"
+          }
+        },
+        "envelope": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "sha256"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "ref"
+                },
+                "sha256": {
+                  "$ref": "#/$defs/hash"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "value"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "replace"
+                },
+                "value": {
+                  "$ref": "#/$defs/envelopeValue"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

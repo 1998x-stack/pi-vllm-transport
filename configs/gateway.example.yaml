@@ -1,0 +1,50 @@
+# DESIGN EXAMPLE ONLY: Gateway code does not exist yet.
+# All keys here are proposed configuration, not valid vLLM CLI flags.
+server:
+  host: "127.0.0.1"
+  port: 18080
+  protocol: "pi-delta/v1"
+  require_client_auth: true
+  client_token_env: "PI_DELTA_GATEWAY_TOKEN"
+
+upstream:
+  kind: "openai-completions"
+  base_url: "http://127.0.0.1:8000/v1"
+  model: "qwen3-0.6b"
+  stream: true
+  timeout_seconds: 300
+
+transport:
+  allowed_modes:
+    - full
+    - gzip
+    - delta
+    - delta-gzip
+  max_request_body_bytes: 16777216
+  max_decompressed_bytes: 67108864
+  max_gzip_expansion_ratio: 100
+  hash_algorithm: "sha256"
+  canonicalization: "RFC8785-JCS"
+  require_expected_request_hash: true
+  fall_back_to_full_on_state_error: true
+
+storage:
+  driver: "sqlite"
+  path: "./data/sessions.sqlite"
+  wal: true
+  session_ttl_hours: 24
+  max_active_sessions: 100
+  max_snapshots_per_branch: 10
+  database_file_mode: "0600"
+
+telemetry:
+  enabled: true
+  log_request_bodies: false
+  log_authorization_headers: false
+  export_prometheus: false
+  record_http_body_bytes: true
+  record_gateway_to_vllm_bytes: true
+
+security:
+  allow_lan_public_bind: false
+  auth_token_source: "environment"

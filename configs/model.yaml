@@ -1,0 +1,31 @@
+# DESIGN EXAMPLE: this is NOT automatically consumed by Pi or vLLM.
+# Pin weight/tokenizer/vLLM revisions before real experiments.
+model:
+  id: "Qwen/Qwen3-0.6B"
+  served_name: "qwen3-0.6b"
+  backend: "vllm"
+  context_window: 8192
+  max_output_tokens: 1024
+  weights_revision: null
+  tokenizer_revision: null
+  tool_call_parser: null  # Verify parser in the pinned vLLM version; e.g. qwen3 if supported.
+  reasoning_parser: null
+  chat_template_kwargs:
+    enable_thinking: false
+  trust_remote_code: false
+
+transport:
+  protocol: "pi-delta/v1"
+  modes:
+    - full
+    - gzip
+    - delta
+    - delta-gzip
+  default_mode: full
+  verify_request_hash: true
+  on_mismatch: full_resync
+
+experiment:
+  warmup_turns: 3
+  seed: 20261118
+  record_raw_prompts: false

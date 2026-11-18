@@ -1,0 +1,48 @@
+# Template only, copy to a private benchmark results directory.
+# Do not commit real prompts, secrets, or sensitive host identifiers.
+experiment:
+  id: null
+  date_utc: null
+  git_revision: null
+  transport_mode: null
+  replay_workload: null
+
+mac_client:
+  macos_version: null
+  cpu: null
+  pi_version: null
+  pi_commit: null
+  node_version: null
+  extension_commit: null
+  ssh_version: null
+
+ubuntu_server:
+  ubuntu_version: null
+  kernel: null
+  cpu_arch: null
+  gpu: null
+  gpu_memory_gb: null
+  driver: null
+  vllm_version: null
+  image_digest: null
+
+model:
+  model_id: "Qwen/Qwen3-0.6B"
+  served_name: "qwen3-0.6b"
+  weights_revision: null
+  tokenizer_revision: null
+  chat_template_sha256: null
+  tool_call_parser: null
+  reasoning_parser: null
+  thinking_enabled: false
+
+network:
+  link_type: "LAN + SSH tunnel"
+  link_speed_mbps: null
+  idle_rtt_ms: null
+  tcp_capture_method: null
+  http_body_count_method: null
+
+safety:
+  includes_real_prompt_content: false
+  includes_secrets: false
