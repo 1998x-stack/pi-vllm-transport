@@ -34,6 +34,8 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 
 ```bash
 bash scripts/smoke-vllm.sh
+# 可选：如确认启用了合适的 tool-call parser，再进行工具调用 smoke
+bash scripts/smoke-tool-vllm.sh
 ```
 
 ## Mac：P0 SSH 隧道 + Pi
