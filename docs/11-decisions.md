@@ -24,6 +24,10 @@
 ## ADR-008：严格 hash 而非“答案相同”
 **状态**：选定（设计）。模型输出有随机性，不能以回答一致验证网络传输；每轮检查完整下游请求 JSON 的确定性哈希。
 
+## ADR-009：Full resync 新建传输分支代际
+
+**状态**：选定（设计）。旧传输分支不允许被 full 原地 reset；既存分支上的非幂等 full 返回 `409 BRANCH_ALREADY_EXISTS`。客户端新建随机 transport_branch_id，revision 从 1 开始，并更新 Pi logical branch 映射。旧分支到 TTL 清理，避免迟到 Delta 产生污染。
+
 ## 风险清单
 | 风险 | 触发条件 | 对策 |
 |---|---|---|

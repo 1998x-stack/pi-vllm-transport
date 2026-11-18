@@ -7,6 +7,10 @@
 - 每个 `(session_id, branch_id)` 在同一时刻只允许一个更改 revision 的请求。
 - 服务端仅保存最后一个**请求输入**快照及有限快照历史；模型生成的 assistant/tool 响应由 Pi 下一轮作为新增输入上传。
 
+### 4.1.1 Full/resync 的代际隔离
+
+首次 full 仅在新的 `(session_id, transport_branch_id)` 上创建 revision=1。已有分支收到一个不同 request_id 的 full 必须返回 `409 BRANCH_ALREADY_EXISTS`。需要重新同步时，Pi 为同一个逻辑分支创建新的随机 transport_branch_id 并上传 full；旧分支只读直到 TTL 清理。这样能防止已在网络中延迟的旧 Delta 写入新历史。
+
 ## 4.2 请求状态机
 ```mermaid
 stateDiagram-v2
@@ -30,7 +34,7 @@ stateDiagram-v2
 - 相同 ID + 不同 body：409，绝不覆写。
 - 相同 ID + 同 body 且仍在执行：返回确定的“already running”错误或支持明确的 reconnect token，**不能默认再启动一轮推理**。
 - 相同 ID + 同 body 且已完成：若未保存可重放事件流则返回需 full resync 的错误，而不是假装原始响应可重播；P3 如实现 durable SSE replay 才允许回放。
-- network timeout 后客户端应先查询请求状态（可增设受鉴权 `GET /delta/v1/requests/{request_id}`），若无法确认则用**新的 request_id + full snapshot**恢复，不复用可能误判的增量链。
+- network timeout 后客户端应先查询请求状态（可增设受鉴权 `GET /delta/v1/requests/{request_id}`），若无法确认则用**新的 request_id + 新 transport_branch_id + full snapshot**恢复，不复用可能误判的增量链。
 - request idempotency 只约束 Gateway；Pi 的 shell、写文件、git commit 等工具执行需要它自身的确认机制，禁止承诺端到端 exactly-once。
 
 ## 4.4 断线时的歧义

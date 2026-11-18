@@ -51,7 +51,7 @@ function makeRequest(previous, current, ackRevision) {
 ## 2.5 Session 与 Branch 身份
 - `client_id` 由 Mac 本地生成随机 UUID，并持久化；不使用硬件序列号。
 - `session_id` 应绑定 Pi 的会话标识，但不用暴露敏感工作区路径。
-- `branch_id` 为会话分支的稳定随机 ID/映射；分支 fork 后不会复用主分支 revision。
+- `branch_id` 是传输代际的稳定随机 ID；本地维护 Pi logical branch → active transport_branch_id 映射。fork 使用新传输分支；full resync 也必须创建新的 transport_branch_id，而不是重置旧 revision。
 - 请求必须包含 `request_id`（随机 UUID）；同一 ID 的内容不可改变。
 - 当 Pi compact、edited prompt、重试改写、模型切换、工具 schema 或 chat template 变化时，检测并使用 replace_suffix 或 full snapshot。
 
@@ -60,7 +60,7 @@ function makeRequest(previous, current, ackRevision) {
 - 响应层：保留 Chat Completions 的 SSE 流式语义，包括 tool_calls 的 partial function arguments。
 - 客户端仅在收到完整响应的 terminal event 后把 assistant 记录交给 Agent 正常入历史；对于不完整工具调用不执行。
 - 不能从 SSE 头的 200 或 Gateway 的 ACK 推出模型生成完成。
-- 失败/不确定状态时，采用新 request_id 的全量快照重建，并禁止静默继续使用未确认的上下文。
+- 失败/不确定状态时，采用新 request_id 和新 transport_branch_id 的全量快照重建，并禁止静默继续使用未确认的上下文。
 
 ## 2.7 模式开关
 `full`、`gzip`、`delta`、`delta-gzip` 四模式共享相同上游请求 renderer。支持客户端 kill switch `PI_TRANSPORT_MODE=full`，保证出错时能够立即退回 P0。

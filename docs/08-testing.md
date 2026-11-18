@@ -26,6 +26,9 @@ L0 Schema & canonical JSON unit tests → L1 diff algorithm → L2 Gateway sessi
 | T18 Unicode | emoji/中文/surrogate/float | 双语言 canonical digest 一致 |
 | T19 大工具结果 | 100 KiB–数 MiB | 不截断、不修改内容 |
 | T20 索引越界 | keep>old.len | 422，状态无变化 |
+| T21 重同步隔离 | 已存在 branch 收到另一个 full | 409，必须使用新 transport_branch_id |
+| T22 旧请求晚到 | 新 branch full resync 后旧 Delta 到达 | 旧消息不能写入新 branch |
+| T23 模型指纹伪造 | 客户端指纹与服务器模型不匹配 | 拒绝，不调用错误模型 |
 
 ## 8.3 黄金语料（golden corpus）
 必须包含至少：

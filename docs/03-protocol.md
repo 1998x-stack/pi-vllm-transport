@@ -23,6 +23,12 @@
 
 SHA-256 字符串格式统一为 `sha256:<64 hex digits>`。版本从 1 起；同一 `session+branch` 每成功接受一个不同的完整输入请求增加 1。`base_hash` 指上一次已接受的完整请求哈希，**不是模型响应哈希**。
 
+### 3.2.1 Full resync 的分支代际规则（强制）
+
+`kind=full` **仅允许新建尚不存在的传输 branch_id**。如果 `(session_id, branch_id)` 已存在，除相同 request_id 的幂等处理以外，返回 `409 BRANCH_ALREADY_EXISTS`，不覆盖当前 revision。首次 full 创建 revision=1。
+
+版本冲突、session 过期、模型变更、断线状态不明：客户端使用**新的传输 branch_id（随机 UUID）和新的 request_id**上传完整请求；本地维护 `Pi logical branch → active transport branch_id` 映射。旧分支在 TTL 到期前保持独立，迟到的 Delta 无法写到新分支。该规则应纳入 L2 状态机测试。
+
 ## 3.3 Snapshot 首次同步
 ```json
 {
@@ -85,6 +91,7 @@ Delta **不依赖** 每轮仅追加：compact、用户编辑和 branch 可能改
 - key 顺序可标准化，数组顺序不可改变；保留数字精度、Unicode、字符串内容与 null/省略区别。
 - `envelope = request 去掉 messages`，也单独计算规范化哈希。
 - hash 范围不包括传输封装字段、gzip 格式、SSE headers；包括 all server-facing generation/config fields。
+- `model_fingerprint` 不是可信的客户端声明。Gateway 必须与它根据当前已锁定模型权重、tokenizer、模板、解析器及部署参数计算出的**服务端权威指纹**核对，不能只依赖请求字段。
 - 对无法规范化的数据（非 JSON、NaN、重复键）拒绝请求。
 - OpenAI 不认识的字段必须由明确的兼容规则保留或拒绝，绝不能悄悄丢弃，以免误称等价。
 
