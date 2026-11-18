@@ -1,0 +1,41 @@
+# NVIDIA only; GPU / driver / image tag must be verified on the Ubuntu host.
+# Configure PI_DELTA_GATEWAY_TOKEN and VLLM_IMAGE using deploy/.env (never commit it).
+services:
+  vllm:
+    image: "${VLLM_IMAGE:?set VLLM_IMAGE in deploy/.env}"
+    command:
+      - --model
+      - "${VLLM_MODEL:-Qwen/Qwen3-0.6B}"
+      - --served-model-name
+      - "${VLLM_SERVED_NAME:-qwen3-0.6b}"
+      - --max-model-len
+      - "${VLLM_MAX_MODEL_LEN:-8192}"
+      - --enable-prefix-caching
+    gpus: all
+    ipc: host
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: server/gateway/Dockerfile
+    environment:
+      PI_DELTA_GATEWAY_TOKEN: "${PI_DELTA_GATEWAY_TOKEN:?set a long random token}"
+      PI_DELTA_UPSTREAM: http://vllm:8000
+      PI_DELTA_MODEL: "${VLLM_SERVED_NAME:-qwen3-0.6b}"
+      PI_DELTA_MODEL_FINGERPRINT: "${PI_DELTA_MODEL_FINGERPRINT:-qwen3-0.6b@v1}"
+      PI_DELTA_HOST: 0.0.0.0
+    depends_on: [vllm]
+    ports:
+      - "127.0.0.1:18080:18080"
+    volumes:
+      - gateway-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  hf-cache:
+  gateway-data:

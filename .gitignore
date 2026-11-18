@@ -1,0 +1,14 @@
+.env
+.env.*
+!**/env.example
+__pycache__/
+.pytest_cache/
+*.pyc
+.coverage
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+data/
+benchmarks/results/
+node_modules/
+.DS_Store
