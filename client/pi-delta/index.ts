@@ -96,7 +96,7 @@ function isOurs(ctx: any): boolean {
 
 export default function (pi: ExtensionAPI) {
   pi.on("before_provider_headers", (event, ctx) => {
-    if (!isOurs(ctx)) return;
+    if (!isOurs(ctx) || mode === "full") return;
     const state = getState(ctx);
     // If the last HTTP request never yielded an acknowledged response, fail closed.
     if (state.pending) reset(state);
@@ -111,7 +111,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_provider_request", (event, ctx) => {
-    if (!isOurs(ctx)) return;
+    if (!isOurs(ctx) || mode === "full") return;
     const state = getState(ctx);
     const pending = state.pending;
     if (!pending) return; // Safer to preserve native payload than invent a delta.
@@ -156,7 +156,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("after_provider_response", (event, ctx) => {
-    if (!isOurs(ctx)) return;
+    if (!isOurs(ctx) || mode === "full") return;
     const state = getState(ctx);
     const pending = state.pending;
     if (!pending) return;

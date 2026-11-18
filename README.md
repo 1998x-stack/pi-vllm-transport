@@ -1,6 +1,6 @@
 # Pi ↔ vLLM Transport Lab
 
-> **状态：设计文档 / Design-first（2026-11-18）**。仓库正在编制可执行的技术规格，**尚未交付、部署或验收增量传输代码**。示例配置不表示两台机器已经连通。
+> **状态：实验性运行时 v0.1（2026-11-18）**。仓库含 Gateway、Pi 扩展原型和自动化测试。模拟 vLLM 的 CI 可执行；**尚未在实际 Mac + Ubuntu + Qwen3 GPU 上验证，不可视为生产就绪**。
 
 在同一个局域网中，以 **macOS 上的 Pi Coding Agent 为客户端**，以 **Ubuntu 上的 vLLM（默认实验模型 Qwen3-0.6B）为推理服务**，研究如何**减少网络重复上传的上下文字节数**，同时保持模型收到的完整请求语义不变。
 
@@ -37,6 +37,15 @@
 | [Gateway 配置示例](configs/gateway.example.yaml) | 规划中的服务设置 |
 | [AGENTS.md](AGENTS.md) | 后续开发的质量门槛 |
 
+## 代码实现（实验性）
+
+- [Ubuntu FastAPI Gateway](server/gateway/pi_delta/app.py)：SQLite 快照、版本锁、Schema、SHA-256、gzip 解码、标准 Chat Completions SSE 转发。
+- [Pi delta 扩展](client/pi-delta/index.ts)：使用原生 OpenAI Completions 解析与三个 Provider Hooks；支持 Full（无状态基线）与 Delta；需要目标 Pi 版本实机验证。
+- [模型/网络脚本](scripts/) 和 [CUDA Compose](deploy/docker-compose.yml)：SSH loopback，避免暴露模型端口。
+- [Python 单元/集成测试](server/gateway/tests/) 和 [CI](.github/workflows/ci.yml)。
+- [四模式真实 HTTP-body A/B CLI](server/gateway/pi_delta/benchmark.py)：需要已经运行的模型；不会模拟 GPU 或伪造结果。
+- [完整运行步骤](docs/13-quickstart-runtime.md) 与 [验证范围](docs/verification.md)。
+
 ## 基本架构
 
 ```mermaid
@@ -72,4 +81,4 @@ flowchart LR
 - [vLLM Prefix Caching](https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/)
 - [Qwen3-0.6B 模型卡](https://huggingface.co/Qwen/Qwen3-0.6B)
 
-> 本仓库的设计规格与示例用于指导后续实现。除明确注明已验证的官方行为外，协议与 Gateway 均为**拟实现方案**。
+> 协议 v1 已有初版代码和无 GPU CI 验证，仍属实验性实现；工具调用质量、Mac Pi Hook 兼容性、GPU/网络真实性能与容错全覆盖仍待实机验证。

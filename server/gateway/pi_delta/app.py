@@ -93,6 +93,14 @@ def create_app(settings: Settings, transport: Optional[httpx.AsyncBaseTransport]
             "max_decompressed_bytes": settings.max_decompressed,
         }
 
+    @app.get("/readyz")
+    def readyz():
+        try:
+            app.state.store._db.execute("SELECT 1").fetchone()
+            return {"status": "ready", "upstream": "not-checked"}
+        except Exception:
+            return _error("DATABASE_UNAVAILABLE", "snapshot database not ready", 503)
+
     @app.get("/delta/v1/metrics")
     def metrics(request: Request):
         token = request.headers.get("authorization", "")
@@ -106,9 +114,15 @@ def create_app(settings: Settings, transport: Optional[httpx.AsyncBaseTransport]
         rid = None
         if not compare_digest(request.headers.get("authorization", ""), "Bearer " + settings.token):
             return _error("UNAUTHORIZED", "invalid bearer token", 401)
-        raw = await request.body()
-        if len(raw) > settings.max_body:
-            return _error("PAYLOAD_TOO_LARGE", "encoded body limit exceeded", 413)
+        # Stream the body with a hard cap; request.body() would buffer unbounded input.
+        chunks = []
+        received = 0
+        async for chunk in request.stream():
+            received += len(chunk)
+            if received > settings.max_body:
+                return _error("PAYLOAD_TOO_LARGE", "encoded body limit exceeded", 413)
+            chunks.append(chunk)
+        raw = b"".join(chunks)
         try:
             body = _unpack(raw, request.headers.get("content-encoding", "").lower(), settings.max_decompressed)
             app.state.stats["requests"] += 1
@@ -144,7 +158,7 @@ def create_app(settings: Settings, transport: Optional[httpx.AsyncBaseTransport]
                     }
                 elif mode == "delta":
                     messages = payload.get("messages", [])
-                    if len(messages) != 1 or messages[0].get("role") != "user" or not isinstance(messages[0].get("content"), str):
+                    if len(messages) != 1 or not isinstance(messages[0], dict) or messages[0].get("role") != "user" or not isinstance(messages[0].get("content"), str):
                         raise ProtocolError("INVALID_DELTA", "delta envelope must be a single user message", 400)
                     packet = json.loads(messages[0]["content"])
                     if not isinstance(packet, dict) or any(
@@ -168,7 +182,7 @@ def create_app(settings: Settings, transport: Optional[httpx.AsyncBaseTransport]
             app.state.stats["accepted"] += 1
         except ProtocolError as exc:
             return _error(exc.code, str(exc), exc.status, rid)
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
             return _error("INVALID_REQUEST", "invalid JSON or missing request fields", 400, rid)
 
         client = httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0), transport=app.state.upstream_transport)
