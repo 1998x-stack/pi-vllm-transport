@@ -1,0 +1,32 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "lan-delta": {
+      "name": "Pi Delta Gateway on Ubuntu",
+      "baseUrl": "http://127.0.0.1:18080/v1",
+      "api": "openai-completions",
+      "apiKey": "$PI_DELTA_GATEWAY_TOKEN",
+      "models": [
+        {
+          "id": "qwen3-0.6b",
+          "name": "Qwen3 0.6B (Delta Gateway)",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 8192,
+          "maxTokens": 1024,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "compat": {
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "maxTokensField": "max_tokens"
+          }
+        }
+      ]
+    }
+  }
+}

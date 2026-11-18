@@ -1,0 +1,47 @@
+name: Gateway and protocol tests
+
+on:
+  push:
+    branches: [main, feat/**]
+  pull_request:
+
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -e "./server/gateway[test]"
+      - name: Run tests
+        run: python -m pytest server/gateway/tests -q
+      - name: Parse configuration JSON
+        run: python -c 'import json; [json.load(open(x)) for x in ["protocol/pi-delta-v1.schema.json","configs/models.pi.example.json","configs/models.delta.pi.example.json"]]'
+      - name: Compile gateway Python
+        run: python -m compileall -q server/gateway/pi_delta
+  pi-hook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Exercise experimental Pi hook with mock events
+        run: node --experimental-strip-types --test client/pi-delta/index.test.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cross-language canonical hash verification
+        run: |
+          python -m pip install rfc8785
+          node --experimental-strip-types --input-type=module -e 'import {sha} from "./client/pi-delta/index.ts"; console.log(sha({b:[1,"中文",null],a:true}))' > /tmp/js.sha
+          python -c 'import rfc8785,hashlib;print("sha256:"+hashlib.sha256(rfc8785.dumps({"b":[1,"中文",None],"a":True})).hexdigest())' > /tmp/py.sha
+          diff -u /tmp/py.sha /tmp/js.sha
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bash syntax
+        run: bash -n scripts/*.sh
